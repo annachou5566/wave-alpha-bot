@@ -2,7 +2,7 @@ name: Update Competition Charts
 
 on:
   schedule:
-    - cron: '3,7 * * * *'
+    - cron: '*/6 * * * *'
   workflow_dispatch:
 
 permissions:
