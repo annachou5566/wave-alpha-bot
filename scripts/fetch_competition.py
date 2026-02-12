@@ -92,7 +92,7 @@ def get_active_tournaments():
         
         # Tính ngày Lookback (Lùi lại 3 ngày để lấy cả giải vừa xong)
         now = datetime.now()
-        lookback_date = (now - timedelta(days=3)).strftime("%Y-%m-%d")
+        lookback_date = now.strftime("%Y-%m-%d")
         print(f"📅 Debug Date: Today={now.strftime('%Y-%m-%d')}, Lookback={lookback_date}")
 
         for item in data:
