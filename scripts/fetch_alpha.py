@@ -53,7 +53,7 @@ KEY_MAP = {
     "id": "i", "symbol": "s", "name": "n", "icon": "ic",
     "chain": "cn", "chain_icon": "ci", "contract": "ct",
     "status": "st", "price": "p", "change_24h": "c",
-    "market_cap": "mc", "liquidity": "l", "volume": "v",
+    "market_cap": "mc", "fdv": "f", "liquidity": "l", "volume": "v", 
     "holders": "h",
     "rolling_24h": "r24", "daily_total": "dt",
     "daily_limit": "dl", "daily_onchain": "do",
@@ -81,6 +81,7 @@ def minify_token_data(token):
     minified[KEY_MAP["mul_point"]] = token.get("mul_point")
 
     minified[KEY_MAP["market_cap"]] = int(token.get("market_cap", 0))
+    minified[KEY_MAP["fdv"]] = int(token.get("fdv", 0)) 
     minified[KEY_MAP["holders"]] = int(token.get("holders", 0))
     minified[KEY_MAP["liquidity"]] = int(token.get("liquidity", 0))
     minified[KEY_MAP["tx_count"]] = int(token.get("tx_count", 0))
@@ -267,6 +268,7 @@ def process_single_token(item):
         "change_24h": safe_float(item.get("percentChange24h")),
         "liquidity": safe_float(item.get("liquidity")),
         "market_cap": safe_float(item.get("marketCap")),
+        "fdv": safe_float(item.get("fdv")),
         "holders": safe_float(item.get("holders")),
         "volume": {
             "rolling_24h": vol_rolling, "daily_total": daily_total,
