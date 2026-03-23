@@ -164,7 +164,7 @@ def get_active_spot_symbols():
     return set()
 
 def fetch_details_optimized(chain_id, contract_addr):
-    if not API_AGG_KLINES: return 0, 0, 0, []
+    if not API_AGG_KLINES: return 0, 0, 0, [], False
     no_lower_chains = ["CT_501", "CT_784"]
     clean_addr = str(contract_addr)
     if chain_id not in no_lower_chains: clean_addr = clean_addr.lower()
@@ -172,12 +172,21 @@ def fetch_details_optimized(chain_id, contract_addr):
     base_url = f"{API_AGG_KLINES}?chainId={chain_id}&interval=1d&limit=30&tokenAddress={clean_addr}"
     d_total, d_limit = 0.0, 0.0
     chart_data = []
+    
+    # CỜ ĐÁNH DẤU CÓ LIMIT VOLUME KHÔNG
+    has_limit_vol = False
 
     try:
         res_limit = fetch_smart(f"{base_url}&dataType=limit")
         if res_limit and res_limit.get("data") and res_limit["data"].get("klineInfos"):
             k_infos = res_limit["data"]["klineInfos"]
-            if k_infos: d_limit = safe_float(k_infos[-1][5])
+            if k_infos: 
+                d_limit = safe_float(k_infos[-1][5])
+                # [THUỐC GIẢI 1] Chống false positive lúc 00:00 UTC
+                if d_limit > 0:
+                    has_limit_vol = True
+                elif len(k_infos) > 1 and safe_float(k_infos[-2][5]) > 0:
+                    has_limit_vol = True
     except: pass
 
     try:
@@ -191,7 +200,7 @@ def fetch_details_optimized(chain_id, contract_addr):
 
     d_market = d_total - d_limit
     if d_market < 0: d_market = 0 
-    return d_total, d_limit, d_market, chart_data
+    return d_total, d_limit, d_market, chart_data, has_limit_vol
 
 def process_single_token(item):
     aid = item.get("alphaId")
@@ -212,14 +221,18 @@ def process_single_token(item):
             status = "PRE_DELISTED"
             need_limit_check = True
 
+    # [THUỐC GIẢI 2] Gỡ bỏ khoá vĩnh viễn DELISTED từ file cache. Vẫn giữ lại status cũ nhưng bắt check lại
     if OLD_DATA_MAP and aid in OLD_DATA_MAP:
         old_item = OLD_DATA_MAP[aid]
         if old_item.get(KEY_MAP["status"]) == "DELISTED":
             status = "DELISTED"
-            need_limit_check = False 
+            # Ép check lại xem có sống lại chưa
+            if is_offline and not is_listing_cex and symbol not in ACTIVE_SPOT_SYMBOLS:
+                need_limit_check = True
 
     should_fetch = False
-    if vol_rolling > 0 and (status == "ALPHA" or status == "PRE_DELISTED"):
+    # Luôn fetch nếu đang có volume HOẶC cần check sống chết
+    if vol_rolling > 0 or need_limit_check:
         should_fetch = True
     
     daily_total, daily_limit, daily_onchain = 0.0, 0.0, 0.0
@@ -228,18 +241,22 @@ def process_single_token(item):
     if should_fetch:
         print(f"📡 {symbol}...", end=" ", flush=True)
         try:
-            d_t, d_l, d_m, chart = fetch_details_optimized(chain_id, contract)
+            d_t, d_l, d_m, chart, has_limit = fetch_details_optimized(chain_id, contract)
             daily_total, daily_limit, daily_onchain = d_t, d_l, d_m
             chart_data = chart
             
             if need_limit_check:
-                if daily_limit > 0:
+                # Dùng has_limit (kiểm tra cả hôm nay và hôm qua) thay vì d_limit đơn thuần
+                if has_limit:
                     status = "ALPHA"
-                    print("✅ ALIVE")
+                    print("✅ ALIVE (Revived)")
                 else:
                     status = "DELISTED"
                     print("❌ DEAD")
-            else: print("OK")
+            else:
+                if status == "DELISTED": status = "ALPHA"
+                print("OK")
+                
             if daily_total <= 0: daily_total = vol_rolling
         except Exception as e:
             print(f"⚠️ Err: {e}")
